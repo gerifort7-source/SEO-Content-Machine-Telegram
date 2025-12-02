@@ -553,6 +553,55 @@
                 });
             }
         });
+
+        // AUTO-SCHEDULER - Check every 30 seconds for posts to publish
+function checkAndPublishScheduledPosts() {
+    const now = new Date();
+    const posts = JSON.parse(localStorage.getItem('posts')) || [];
+    
+    posts.forEach(post => {
+        if (post.status === 'scheduled') {
+            const scheduledTime = new Date(post.scheduledDate);
+            if (now >= scheduledTime) {
+                publishScheduledPostToTelegram(post);
+            }
+        }
+    });
+}
+
+async function publishScheduledPostToTelegram(post) {
+    const settings = JSON.parse(localStorage.getItem('settings')) || {};
+    if (!settings.botToken || !settings.chatId) return;
+    
+    try {
+        const url = `https://api.telegram.org/bot${settings.botToken}/sendMessage`;
+        const params = new URLSearchParams();
+        params.append('chat_id', settings.chatId);
+        params.append('text', post.text);
+        params.append('parse_mode', 'HTML');
+        
+        const response = await fetch(url, { method: 'POST', body: params });
+        
+        if (response.ok) {
+            post.status = 'published';
+            const posts = JSON.parse(localStorage.getItem('posts')) || [];
+            const index = posts.findIndex(p => p.id === post.id);
+            if (index >= 0) {
+                posts[index].status = 'published';
+                localStorage.setItem('posts', JSON.stringify(posts));
+            }
+            updateStats();
+            displayScheduledPosts();
+            showAlert('✉️ Отложенный пост опубликован!');
+        }
+    } catch (error) {
+        console.error('Ошибка автопубликации:', error);
+    }
+}
+
+// START AUTO-SCHEDULER - check every 30 seconds
+setInterval(checkAndPublishScheduledPosts, 30000);
+checkAndPublishScheduledPosts(); // Initial check on load
     </script>
 </body>
 </html>
